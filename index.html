@@ -1,0 +1,502 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Control de Gastos y Saldos">
+    <title>Control de Gastos y Saldos</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #e0e7ff 0%, #f3e8ff 100%);
+            min-height: 100vh;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+            animation: fadeIn 0.3s ease-in;
+        }
+        .fade-in {
+            animation: fadeIn 0.3s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .tab {
+            transition: all 0.3s ease;
+        }
+        .tab:hover {
+            background-color: #3b82f6;
+            color: white;
+        }
+        table tr {
+            transition: background-color 0.2s;
+        }
+        table tr:nth-child(even) {
+            background-color: #f9fafb;
+        }
+        table tr:hover {
+            background-color: #e5e7eb;
+        }
+        button i {
+            margin-right: 0.5rem;
+        }
+    </style>
+</head>
+<body class="p-4">
+    <h1 class="text-2xl font-bold text-center text-gray-800 mb-6">Control de Gastos y Saldos</h1>
+    <div class="tabs flex justify-center mb-6">
+        <div class="tab px-4 py-2 bg-gray-200 text-gray-700 font-semibold rounded-t-lg cursor-pointer active:bg-blue-500 active:text-white mr-2 active" onclick="showTab('expenses')">Control de Gastos</div>
+        <div class="tab px-4 py-2 bg-gray-200 text-gray-700 font-semibold rounded-t-lg cursor-pointer" onclick="showTab('balances')">Control de Saldos</div>
+    </div>
+
+    <div id="expenses" class="tab-content active">
+        <div class="form-container bg-white p-6 rounded-lg shadow-lg mb-6">
+            <h2 class="text-lg font-semibold text-gray-800 mb-4">Agregar Gasto</h2>
+            <input type="text" id="description" placeholder="Descripción del gasto" class="w-full p-3 mb-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+            <input type="number" id="amount" placeholder="Monto" step="0.01" class="w-full p-3 mb-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+            <select id="category" class="w-full p-3 mb-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="Alquiler">Alquiler</option>
+                <option value="TC">TC</option>
+                <option value="Hogar">Hogar</option>
+                <option value="Diario">Diario</option>
+                <option value="Obra Social">Obra Social</option>
+                <option value="Varios">Varios</option>
+                <option value="Auto">Auto</option>
+                <option value="USS (ahorro)">USS (ahorro)</option>
+            </select>
+            <select id="paymentMethod" class="w-full p-3 mb-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="MP">MP</option>
+                <option value="NX">NX</option>
+                <option value="PP">PP</option>
+                <option value="EF">EF</option>
+                <option value="CP">CP</option>
+                <option value="BBVA">BBVA</option>
+            </select>
+            <input type="date" id="date" class="w-full p-3 mb-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+            <button onclick="addExpense()" class="w-full p-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"><i class="fas fa-plus"></i> Agregar Gasto</button>
+        </div>
+
+        <div class="form-container bg-white p-6 rounded-lg shadow-lg mb-6">
+            <h2 class="text-lg font-semibold text-gray-800 mb-4">Gestionar Categorías</h2>
+            <input type="text" id="newCategory" placeholder="Nueva categoría (ej. Educación)" class="w-full p-3 mb-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <button onclick="addCategory()" class="w-full p-3 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors"><i class="fas fa-folder-plus"></i> Agregar Categoría</button>
+        </div>
+
+        <table id="categoryTable" class="w-full bg-white rounded-lg shadow-lg mb-6">
+            <thead>
+                <tr class="bg-blue-500 text-white">
+                    <th class="p-3 text-left">Categoría</th>
+                    <th class="p-3 text-left">Acción</th>
+                </tr>
+            </thead>
+            <tbody id="categoryList" class="fade-in"></tbody>
+        </table>
+
+        <table id="expenseTable" class="w-full bg-white rounded-lg shadow-lg mb-6">
+            <thead>
+                <tr class="bg-blue-500 text-white">
+                    <th class="p-3 text-left">Descripción</th>
+                    <th class="p-3 text-left">Monto</th>
+                    <th class="p-3 text-left">Categoría</th>
+                    <th class="p-3 text-left">Medio de Pago</th>
+                    <th class="p-3 text-left">Fecha</th>
+                    <th class="p-3 text-left">Acción</th>
+                </tr>
+            </thead>
+            <tbody id="expenseList" class="fade-in"></tbody>
+        </table>
+
+        <div class="summary bg-white p-6 rounded-lg shadow-lg mb-6">
+            <h2 class="text-lg font-semibold text-gray-800 mb-3">Resumen</h2>
+            <p class="text-gray-700">Total Gastos: $<span id="totalAmount">0</span></p>
+            <p class="text-gray-700 mt-2">Gastos por Categoría:</p>
+            <ul id="categorySummary" class="list-disc pl-5 text-gray-700"></ul>
+        </div>
+
+        <div class="flex flex-col space-y-3">
+            <button onclick="downloadExpenses()" class="w-full p-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"><i class="fas fa-download"></i> Descargar Detalle de Gastos</button>
+            <button onclick="downloadCategorySummary()" class="w-full p-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"><i class="fas fa-download"></i> Descargar Resumen por Categoría</button>
+            <button onclick="clearExpenses()" class="w-full p-3 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"><i class="fas fa-trash-alt"></i> Limpiar Gastos</button>
+        </div>
+    </div>
+
+    <div id="balances" class="tab-content">
+        <div class="form-container bg-white p-6 rounded-lg shadow-lg mb-6">
+            <h2 class="text-lg font-semibold text-gray-800 mb-4">Gestionar Saldos</h2>
+            <input type="text" id="paymentMethodName" placeholder="Nombre del medio de pago (ej. MP, Tarjeta Visa)" class="w-full p-3 mb-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <input type="number" id="paymentMethodBalance" placeholder="Saldo" step="0.01" class="w-full p-3 mb-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <button onclick="updatePaymentMethod()" class="w-full p-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"><i class="fas fa-wallet"></i> Actualizar/Agregar Saldo</button>
+        </div>
+
+        <table id="paymentMethodTable" class="w-full bg-white rounded-lg shadow-lg mb-6">
+            <thead>
+                <tr class="bg-blue-500 text-white">
+                    <th class="p-3 text-left">Medio de Pago</th>
+                    <th class="p-3 text-left">Saldo</th>
+                    <th class="p-3 text-left">Acción</th>
+                </tr>
+            </thead>
+            <tbody id="paymentMethodList" class="fade-in"></tbody>
+        </table>
+
+        <button onclick="clearPaymentMethods()" class="w-full p-3 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"><i class="fas fa-trash-alt"></i> Limpiar Saldos</button>
+    </div>
+
+    <script>
+        let expenses = JSON.parse(localStorage.getItem('expenses')) || [];
+        let paymentMethods = JSON.parse(localStorage.getItem('paymentMethods')) || [
+            { name: 'MP', balance: 0 },
+            { name: 'NX', balance: 0 },
+            { name: 'PP', balance: 0 },
+            { name: 'EF', balance: 0 },
+            { name: 'CP', balance: 0 },
+            { name: 'BBVA', balance: 0 }
+        ];
+        let categories = JSON.parse(localStorage.getItem('categories')) || [
+            'Alquiler', 'TC', 'Hogar', 'Diario', 'Obra Social', 'Varios', 'Auto', 'USS (ahorro)'
+        ];
+
+        function saveExpenses() {
+            localStorage.setItem('expenses', JSON.stringify(expenses));
+        }
+
+        function savePaymentMethods() {
+            localStorage.setItem('paymentMethods', JSON.stringify(paymentMethods));
+        }
+
+        function saveCategories() {
+            localStorage.setItem('categories', JSON.stringify(categories));
+        }
+
+        function showTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active:bg-blue-500', 'active:text-white'));
+            document.getElementById(tabId).classList.add('active');
+            document.querySelector(`.tab[onclick="showTab('${tabId}')"]`).classList.add('active:bg-blue-500', 'active:text-white');
+            if (tabId === 'expenses') {
+                renderExpenses();
+                renderCategories();
+            }
+            if (tabId === 'balances') renderPaymentMethods();
+        }
+
+        function addCategory() {
+            const newCategory = document.getElementById('newCategory').value.trim();
+            if (!newCategory) {
+                alert('Por favor, ingresa un nombre para la categoría.');
+                return;
+            }
+            if (categories.includes(newCategory)) {
+                alert('Esta categoría ya existe.');
+                return;
+            }
+            categories.push(newCategory);
+            saveCategories();
+            updateCategorySelect();
+            renderCategories();
+            document.getElementById('newCategory').value = '';
+        }
+
+        function deleteCategory(category) {
+            if (expenses.some(e => e.category === category)) {
+                alert('No se puede eliminar esta categoría porque está asociada a gastos.');
+                return;
+            }
+            categories = categories.filter(c => c !== category);
+            saveCategories();
+            updateCategorySelect();
+            renderCategories();
+        }
+
+        function updateCategorySelect() {
+            const select = document.getElementById('category');
+            select.innerHTML = '';
+            categories.forEach(category => {
+                const option = document.createElement('option');
+                option.value = category;
+                option.textContent = category;
+                select.appendChild(option);
+            });
+        }
+
+        function renderCategories() {
+            const categoryList = document.getElementById('categoryList');
+            categoryList.innerHTML = '';
+            categories.forEach(category => {
+                const row = document.createElement('tr');
+                row.classList.add('fade-in');
+                row.innerHTML = `
+                    <td class="p-3">${category}</td>
+                    <td class="p-3"><button class="bg-red-500 text-white px-3 py-1 rounded-lg hover:bg-red-600 transition-colors" onclick="deleteCategory('${category}')"><i class="fas fa-trash"></i> Eliminar</button></td>
+                `;
+                categoryList.appendChild(row);
+            });
+        }
+
+        function addExpense() {
+            const description = document.getElementById('description').value;
+            const amount = parseFloat(document.getElementById('amount').value);
+            const category = document.getElementById('category').value;
+            const paymentMethod = document.getElementById('paymentMethod').value;
+            const date = document.getElementById('date').value;
+
+            if (!description || isNaN(amount) || !date || !paymentMethod) {
+                alert('Por favor, completa todos los campos.');
+                return;
+            }
+
+            const method = paymentMethods.find(m => m.name === paymentMethod);
+            if (method) {
+                method.balance -= amount;
+                savePaymentMethods();
+            }
+
+            const expense = { id: Date.now(), description, amount, category, paymentMethod, date };
+            expenses.push(expense);
+            saveExpenses();
+            renderExpenses();
+            clearForm();
+        }
+
+        function deleteExpense(id) {
+            const expense = expenses.find(e => e.id === id);
+            if (expense) {
+                const method = paymentMethods.find(m => m.name === expense.paymentMethod);
+                if (method) {
+                    method.balance += expense.amount;
+                    savePaymentMethods();
+                }
+            }
+            expenses = expenses.filter(expense => expense.id !== id);
+            saveExpenses();
+            renderExpenses();
+        }
+
+        function clearExpenses() {
+            expenses.forEach(expense => {
+                const method = paymentMethods.find(m => m.name === expense.paymentMethod);
+                if (method) {
+                    method.balance += expense.amount;
+                }
+            });
+            expenses = [];
+            saveExpenses();
+            savePaymentMethods();
+            renderExpenses();
+        }
+
+        function clearPaymentMethods() {
+            if (expenses.length > 0) {
+                alert('No se pueden limpiar los saldos porque hay gastos asociados. Limpia los gastos primero.');
+                return;
+            }
+            paymentMethods = [
+                { name: 'MP', balance: 0 },
+                { name: 'NX', balance: 0 },
+                { name: 'PP', balance: 0 },
+                { name: 'EF', balance: 0 },
+                { name: 'CP', balance: 0 },
+                { name: 'BBVA', balance: 0 }
+            ];
+            savePaymentMethods();
+            updatePaymentMethodSelect();
+            renderPaymentMethods();
+        }
+
+        function downloadExpenses() {
+            const data = expenses.map(expense => ({
+                ID: expense.id,
+                Descripción: expense.description,
+                Monto: expense.amount.toFixed(2),
+                Categoría: expense.category,
+                'Medio de Pago': expense.paymentMethod,
+                Fecha: expense.date
+            }));
+            const ws = XLSX.utils.json_to_sheet(data);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Gastos');
+            XLSX.write(wb, 'gastos.xlsx');
+        }
+
+        function downloadCategorySummary() {
+            const uniqueCategories = [...new Set(expenses.map(expense => expense.category))];
+            const data = uniqueCategories.map(category => {
+                const total = expenses
+                    .filter(expense => expense.category === category)
+                    .reduce((sum, expense) => sum + expense.amount, 0);
+                return { Categoría: category, 'Total Gastado': total.toFixed(2) };
+            });
+            const ws = XLSX.utils.json_to_sheet(data);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Resumen_Categorías');
+            XLSX.write(wb, 'resumen_categorias.xlsx');
+        }
+
+        function updatePaymentMethod() {
+            const name = document.getElementById('paymentMethodName').value;
+            const balance = parseFloat(document.getElementById('paymentMethodBalance').value);
+
+            if (!name || isNaN(balance)) {
+                alert('Por favor, completa el nombre y el saldo.');
+                return;
+            }
+
+            const existingMethod = paymentMethods.find(m => m.name.toLowerCase() === name.toLowerCase());
+            if (existingMethod) {
+                existingMethod.balance = balance;
+            } else {
+                paymentMethods.push({ name, balance });
+                updatePaymentMethodSelect();
+            }
+            savePaymentMethods();
+            renderPaymentMethods();
+            document.getElementById('paymentMethodName').value = '';
+            document.getElementById('paymentMethodBalance').value = '';
+        }
+
+        function updatePaymentMethodSelect() {
+            const select = document.getElementById('paymentMethod');
+            select.innerHTML = '';
+            paymentMethods.forEach(method => {
+                const option = document.createElement('option');
+                option.value = method.name;
+                option.textContent = method.name;
+                select.appendChild(option);
+            });
+        }
+
+        function clearForm() {
+            document.getElementById('description').value = '';
+            document.getElementById('amount').value = '';
+            document.getElementById('category').value = 'Alquiler';
+            document.getElementById('paymentMethod').value = 'EF';
+            document.getElementById('date').value = '';
+        }
+
+        function renderExpenses() {
+            const expenseList = document.getElementById('expenseList');
+            expenseList.innerHTML = '';
+
+            expenses.forEach(expense => {
+                const row = document.createElement('tr');
+                row.classList.add('fade-in');
+                row.innerHTML = `
+                    <td class="p-3">${expense.description}</td>
+                    <td class="p-3">$${expense.amount.toFixed(2)}</td>
+                    <td class="p-3">${expense.category}</td>
+                    <td class="p-3">${expense.paymentMethod}</td>
+                    <td class="p-3">${expense.date}</td>
+                    <td class="p-3"><button class="bg-red-500 text-white px-3 py-1 rounded-lg hover:bg-red-600 transition-colors" onclick="deleteExpense(${expense.id})"><i class="fas fa-trash"></i> Eliminar</button></td>
+                `;
+                expenseList.appendChild(row);
+            });
+
+            updateSummary();
+        }
+
+        function updateSummary() {
+            const totalAmount = expenses.reduce((sum, expense) => sum + expense.amount, 0);
+            document.getElementById('totalAmount').textContent = totalAmount.toFixed(2);
+
+            const categorySummary = document.getElementById('categorySummary');
+            categorySummary.innerHTML = '';
+            const uniqueCategories = [...new Set(expenses.map(expense => expense.category))];
+            uniqueCategories.forEach(category => {
+                const total = expenses
+                    .filter(expense => expense.category === category)
+                    .reduce((sum, expense) => sum + expense.amount, 0);
+                const li = document.createElement('li');
+                li.textContent = `${category}: $${total.toFixed(2)}`;
+                categorySummary.appendChild(li);
+            });
+        }
+
+        function renderPaymentMethods() {
+            const paymentMethodList = document.getElementById('paymentMethodList');
+            paymentMethodList.innerHTML = '';
+
+            paymentMethods.forEach(method => {
+                const row = document.createElement('tr');
+                row.classList.add('fade-in');
+                row.innerHTML = `
+                    <td class="p-3">${method.name}</td>
+                    <td class="p-3">$${method.balance.toFixed(2)}</td>
+                    <td class="p-3"><button class="bg-red-500 text-white px-3 py-1 rounded-lg hover:bg-red-600 transition-colors" onclick="deletePaymentMethod('${method.name}')"><i class="fas fa-trash"></i> Eliminar</button></td>
+                `;
+                paymentMethodList.appendChild(row);
+            });
+        }
+
+        function deletePaymentMethod(name) {
+            if (expenses.some(e => e.paymentMethod === name)) {
+                alert('No se puede eliminar este medio de pago porque está asociado a gastos.');
+                return;
+            }
+            paymentMethods = paymentMethods.filter(m => m.name !== name);
+            savePaymentMethods();
+            updatePaymentMethodSelect();
+            renderPaymentMethods();
+        }
+
+        // Cargar datos al iniciar
+        renderExpenses();
+        renderPaymentMethods();
+        renderCategories();
+        updateCategorySelect();
+        updatePaymentMethodSelect();
+
+        // Soporte para PWA
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+        });
+    </script>
+</body>
+</html>
