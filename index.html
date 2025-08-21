@@ -49,7 +49,6 @@
     <link rel="manifest" href="manifest.json">
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -163,8 +162,6 @@
         </div>
 
         <div class="flex flex-col space-y-3">
-            <button onclick="downloadExpenses()" class="w-full p-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"><i class="fas fa-download"></i> Descargar Detalle de Gastos</button>
-            <button onclick="downloadCategorySummary()" class="w-full p-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"><i class="fas fa-download"></i> Descargar Resumen por Categoría</button>
             <button onclick="clearExpenses()" class="w-full p-3 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"><i class="fas fa-trash-alt"></i> Limpiar Gastos</button>
         </div>
     </div>
@@ -187,6 +184,11 @@
             </thead>
             <tbody id="paymentMethodList" class="fade-in"></tbody>
         </table>
+
+        <div class="summary bg-white p-6 rounded-lg shadow-lg mb-6">
+            <h2 class="text-lg font-semibold text-gray-800 mb-3">Resumen de Saldos</h2>
+            <p class="text-gray-700">Saldo Total: $<span id="totalBalance">0</span></p>
+        </div>
 
         <button onclick="clearPaymentMethods()" class="w-full p-3 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"><i class="fas fa-trash-alt"></i> Limpiar Saldos</button>
     </div>
@@ -384,35 +386,6 @@
             renderPaymentMethods();
         }
 
-        function downloadExpenses() {
-            const data = expenses.map(expense => ({
-                ID: expense.id,
-                Descripción: expense.description,
-                Monto: expense.amount.toFixed(2),
-                Categoría: expense.category,
-                'Medio de Pago': expense.paymentMethod,
-                Fecha: expense.date
-            }));
-            const ws = XLSX.utils.json_to_sheet(data);
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, 'Gastos');
-            XLSX.write(wb, 'gastos.xlsx');
-        }
-
-        function downloadCategorySummary() {
-            const uniqueCategories = [...new Set(expenses.map(expense => expense.category))];
-            const data = uniqueCategories.map(category => {
-                const total = expenses
-                    .filter(expense => expense.category === category)
-                    .reduce((sum, expense) => sum + expense.amount, 0);
-                return { Categoría: category, 'Total Gastado': total.toFixed(2) };
-            });
-            const ws = XLSX.utils.json_to_sheet(data);
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, 'Resumen_Categorías');
-            XLSX.write(wb, 'resumen_categorias.xlsx');
-        }
-
         function updatePaymentMethod() {
             const name = document.getElementById('paymentMethodName').value;
             const balance = parseFloat(document.getElementById('paymentMethodBalance').value);
@@ -506,6 +479,10 @@
                 `;
                 paymentMethodList.appendChild(row);
             });
+
+            // Actualizar saldo total
+            const totalBalance = paymentMethods.reduce((sum, method) => sum + method.balance, 0);
+            document.getElementById('totalBalance').textContent = totalBalance.toFixed(2);
         }
 
         function deletePaymentMethod(name) {
@@ -528,7 +505,7 @@
 
         // Registrar service worker para PWA
         if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/sw.js')
+            navigator.serviceWorker.register('/control-gastos-app/sw.js')
                 .then(() => console.log('Service Worker registrado'))
                 .catch(err => console.error('Error al registrar Service Worker:', err));
         }
